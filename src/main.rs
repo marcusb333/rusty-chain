@@ -1,7 +1,17 @@
-use blockchain::{Blockchain, Store, Transaction};
+use blockchain::{Blockchain, Store, Transaction, Wallet};
 
 fn main() {
     println!("🔗 Rust PoW Blockchain - Starter Architecture\n");
+
+    // Create wallets
+    let alice = Wallet::new();
+    let bob = Wallet::new();
+    let miner = Wallet::new();
+
+    println!("👛 Wallets created:");
+    println!("   Alice:  {}", alice.address());
+    println!("   Bob:    {}", bob.address());
+    println!("   Miner:  {}\n", miner.address());
 
     // Initialize blockchain
     let mut blockchain = Blockchain::new();
@@ -9,20 +19,17 @@ fn main() {
 
     // === Round 1: Add and mine transactions ===
     println!("📝 Round 1: Adding transactions...");
+
+    let mut tx1 = Transaction::new(alice.address().to_string(), bob.address().to_string(), 10.5);
+    tx1.sign(&alice);
     blockchain
-        .add_transaction(Transaction::new(
-            "alice".to_string(),
-            "bob".to_string(),
-            10.5,
-        ))
+        .add_transaction(tx1)
         .expect("Failed to add transaction");
 
+    let mut tx2 = Transaction::new(bob.address().to_string(), alice.address().to_string(), 5.0);
+    tx2.sign(&bob);
     blockchain
-        .add_transaction(Transaction::new(
-            "bob".to_string(),
-            "charlie".to_string(),
-            5.0,
-        ))
+        .add_transaction(tx2)
         .expect("Failed to add transaction");
 
     println!("✓ 2 transactions added\n");
@@ -30,27 +37,24 @@ fn main() {
     // Mine block 1
     println!("⛏️  Mining block 1...");
     blockchain
-        .mine_block("miner1")
+        .mine_block(miner.address())
         .expect("Failed to mine block");
 
     println!();
 
     // === Round 2: More transactions ===
     println!("📝 Round 2: Adding more transactions...");
+
+    let mut tx3 = Transaction::new(bob.address().to_string(), alice.address().to_string(), 3.5);
+    tx3.sign(&bob);
     blockchain
-        .add_transaction(Transaction::new(
-            "charlie".to_string(),
-            "alice".to_string(),
-            3.5,
-        ))
+        .add_transaction(tx3)
         .expect("Failed to add transaction");
 
+    let mut tx4 = Transaction::new(alice.address().to_string(), bob.address().to_string(), 2.0);
+    tx4.sign(&alice);
     blockchain
-        .add_transaction(Transaction::new(
-            "alice".to_string(),
-            "dave".to_string(),
-            2.0,
-        ))
+        .add_transaction(tx4)
         .expect("Failed to add transaction");
 
     println!("✓ 2 transactions added\n");
@@ -58,7 +62,7 @@ fn main() {
     // Mine block 2
     println!("⛏️  Mining block 2...");
     blockchain
-        .mine_block("miner1")
+        .mine_block(miner.address())
         .expect("Failed to mine block");
 
     println!();
