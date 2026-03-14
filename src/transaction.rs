@@ -221,8 +221,18 @@ mod tests {
     #[test]
     fn test_take_transactions_more_than_available() {
         let mut pool = TransactionPool::new();
-        pool.add_transaction(Transaction::new("system".to_string(), "bob".to_string(), 1.0)).unwrap();
-        pool.add_transaction(Transaction::new("system".to_string(), "carol".to_string(), 2.0)).unwrap();
+        pool.add_transaction(Transaction::new(
+            "system".to_string(),
+            "bob".to_string(),
+            1.0,
+        ))
+        .unwrap();
+        pool.add_transaction(Transaction::new(
+            "system".to_string(),
+            "carol".to_string(),
+            2.0,
+        ))
+        .unwrap();
 
         let txs = pool.take_transactions(10); // request more than available
         assert_eq!(txs.len(), 2);

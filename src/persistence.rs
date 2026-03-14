@@ -18,10 +18,7 @@ impl Store {
     pub fn save_blockchain(blockchain: &Blockchain, path: &str) -> Result<(), String> {
         let file = BlockchainFile {
             chain: blockchain.chain.clone(),
-            pending_transactions: blockchain
-                .transaction_pool
-                .pending_transactions()
-                .to_vec(),
+            pending_transactions: blockchain.transaction_pool.pending_transactions().to_vec(),
         };
         let json = serde_json::to_string_pretty(&file)
             .map_err(|e| format!("Serialization error: {}", e))?;

@@ -102,7 +102,7 @@ fn main() {
                     println!("No wallets found. Create one with: rusty-chain wallet create <name>");
                     return;
                 }
-                println!("{:<12} {}", "NAME", "ADDRESS");
+                println!("{:<12} ADDRESS", "NAME");
                 for w in &wallets {
                     println!("{:<12} {}", w.name, w.address);
                 }
@@ -139,11 +139,7 @@ fn main() {
                     .unwrap_or(to)
             };
 
-            let mut tx = Transaction::new(
-                wallet.address().to_string(),
-                to_address.clone(),
-                amount,
-            );
+            let mut tx = Transaction::new(wallet.address().to_string(), to_address.clone(), amount);
             tx.sign(&wallet);
 
             let mut blockchain = load_or_create_blockchain();
