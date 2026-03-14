@@ -245,4 +245,61 @@ mod tests {
         assert!(!tx.id.is_empty());
         assert_eq!(tx.id.len(), 64); // SHA256 hex
     }
+
+    #[test]
+    fn test_serde_default_optional_fields() {
+        let json = r#"{"from":"system","to":"bob","amount":1.0,"timestamp":0,"id":"abc"}"#;
+        let tx: Transaction = serde_json::from_str(json).unwrap();
+        assert!(tx.signature.is_none());
+        assert!(tx.public_key.is_none());
+    }
+
+    #[test]
+    fn test_clone_and_partial_eq() {
+        let tx = Transaction::new("system".to_string(), "bob".to_string(), 5.0);
+        let cloned = tx.clone();
+        assert_eq!(tx, cloned);
+    }
+
+    #[test]
+    fn test_signable_bytes_content() {
+        let tx = Transaction::new("system".to_string(), "bob".to_string(), 5.0);
+        let bytes = tx.signable_bytes();
+        let s = String::from_utf8(bytes).unwrap();
+        assert!(s.contains("system"));
+        assert!(s.contains("bob"));
+        assert!(s.contains("5"));
+    }
+
+    #[test]
+    fn test_wrong_wallet_signature_invalid() {
+        let wallet = Wallet::new();
+        let other = Wallet::new();
+        let mut tx = Transaction::new(wallet.address().to_string(), "bob".to_string(), 10.0);
+        tx.sign(&other); // signed by wrong key
+        assert!(!tx.is_valid());
+    }
+
+    #[test]
+    fn test_pool_pending_transactions_slice() {
+        let mut pool = TransactionPool::new();
+        pool.add_transaction(Transaction::new("system".to_string(), "bob".to_string(), 1.0)).unwrap();
+        assert_eq!(pool.pending_transactions().len(), 1);
+    }
+
+    #[test]
+    fn test_pool_from_transactions() {
+        let txs = vec![Transaction::new("system".to_string(), "bob".to_string(), 1.0)];
+        let pool = TransactionPool::from_transactions(txs);
+        assert_eq!(pool.pending_count(), 1);
+    }
+
+    #[test]
+    fn test_pool_take_zero() {
+        let mut pool = TransactionPool::new();
+        pool.add_transaction(Transaction::new("system".to_string(), "bob".to_string(), 1.0)).unwrap();
+        let taken = pool.take_transactions(0);
+        assert!(taken.is_empty());
+        assert_eq!(pool.pending_count(), 1);
+    }
 }
