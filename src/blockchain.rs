@@ -111,11 +111,7 @@ impl Blockchain {
     pub fn get_stats(&self) -> BlockchainStats {
         BlockchainStats {
             total_blocks: self.chain.len(),
-            total_transactions: self
-                .chain
-                .iter()
-                .map(|b| b.transactions.len())
-                .sum(),
+            total_transactions: self.chain.iter().map(|b| b.transactions.len()).sum(),
             pending_transactions: self.transaction_pool.pending_count(),
             difficulty: self.difficulty,
             latest_hash: self.get_latest_block().hash.clone(),

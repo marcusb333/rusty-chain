@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
-use crate::transaction::Transaction;
 use crate::crypto;
+use crate::transaction::Transaction;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BlockHeader {
@@ -67,8 +67,7 @@ impl Block {
 
     /// Compute block hash from header
     pub fn compute_hash(&self) -> String {
-        let header_json = serde_json::to_string(&self.header)
-            .unwrap_or_default();
+        let header_json = serde_json::to_string(&self.header).unwrap_or_default();
         crypto::hash_sha256(header_json.as_bytes())
     }
 
