@@ -1,0 +1,56 @@
+name: Security Scan
+
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'Cargo.toml'
+      - 'Cargo.lock'
+      - '.github/workflows/security-scan.yml'
+
+  schedule:
+    - cron: '0 2 * * *'
+
+  workflow_dispatch:
+
+jobs:
+  audit:
+    name: Cargo Audit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Install cargo-audit
+        run: cargo install cargo-audit
+
+      - name: Run cargo audit
+        run: |
+          cargo audit --json > cargo-audit-report.json 2>/dev/null || true
+          cargo audit 2>&1 | tee cargo-audit-output.txt || AUDIT_EXIT=$?
+
+          VULN_COUNT=$(jq '.vulnerabilities.found // 0' cargo-audit-report.json 2>/dev/null || echo "0")
+
+          {
+            echo "## Cargo Audit Results"
+            echo ""
+            echo "Found **$VULN_COUNT** vulnerabilities"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          if [ "${AUDIT_EXIT:-0}" -ne 0 ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "Review \`cargo audit\` output for details." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Upload audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cargo-audit-report
+          path: |
+            cargo-audit-report.json
+            cargo-audit-output.txt
+          retention-days: 30
