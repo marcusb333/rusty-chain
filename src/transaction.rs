@@ -1,5 +1,5 @@
-use serde::{Serialize, Deserialize};
 use crate::crypto;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct Transaction {
@@ -26,8 +26,8 @@ impl Transaction {
         };
 
         // Hash the transaction data for an ID
-        let id = crypto::hash_object(&(&tx.from, &tx.to, tx.amount, tx.timestamp))
-            .unwrap_or_default();
+        let id =
+            crypto::hash_object(&(&tx.from, &tx.to, tx.amount, tx.timestamp)).unwrap_or_default();
 
         Transaction { id, ..tx }
     }
@@ -58,7 +58,9 @@ impl TransactionPool {
     }
 
     pub fn take_transactions(&mut self, count: usize) -> Vec<Transaction> {
-        self.pending.drain(..count.min(self.pending.len())).collect()
+        self.pending
+            .drain(..count.min(self.pending.len()))
+            .collect()
     }
 
     pub fn pending_count(&self) -> usize {
@@ -99,7 +101,7 @@ mod tests {
     fn test_transaction_pool() {
         let mut pool = TransactionPool::new();
         let tx = Transaction::new("alice".to_string(), "bob".to_string(), 10.0);
-        
+
         pool.add_transaction(tx).unwrap();
         assert_eq!(pool.pending_count(), 1);
 

@@ -9,19 +9,17 @@ impl Store {
         let json = serde_json::to_string_pretty(&blockchain.chain)
             .map_err(|e| format!("Serialization error: {}", e))?;
 
-        fs::write(path, json)
-            .map_err(|e| format!("Failed to write file: {}", e))?;
+        fs::write(path, json).map_err(|e| format!("Failed to write file: {}", e))?;
 
         Ok(())
     }
 
     /// Load blockchain from disk
     pub fn load_blockchain(path: &str) -> Result<Blockchain, String> {
-        let json = fs::read_to_string(path)
-            .map_err(|e| format!("Failed to read file: {}", e))?;
+        let json = fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))?;
 
-        let chain = serde_json::from_str(&json)
-            .map_err(|e| format!("Deserialization error: {}", e))?;
+        let chain =
+            serde_json::from_str(&json).map_err(|e| format!("Deserialization error: {}", e))?;
 
         Ok(Blockchain {
             chain,
@@ -34,7 +32,7 @@ impl Store {
     pub fn print_blockchain(blockchain: &Blockchain) {
         println!("\n🔗 Blockchain State:");
         println!("   Total blocks: {}", blockchain.chain.len());
-        
+
         for block in &blockchain.chain {
             println!(
                 "\n   Block #{} | Txs: {} | Hash: {}...",

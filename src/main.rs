@@ -1,4 +1,4 @@
-use blockchain::{Blockchain, Transaction, Store};
+use blockchain::{Blockchain, Store, Transaction};
 
 fn main() {
     println!("🔗 Rust PoW Blockchain - Starter Architecture\n");
@@ -83,13 +83,11 @@ fn main() {
 
     // === Persistence ===
     println!("\n💾 Saving blockchain...");
-    Store::save_blockchain(&blockchain, "blockchain.json")
-        .expect("Failed to save");
+    Store::save_blockchain(&blockchain, "blockchain.json").expect("Failed to save");
     println!("✓ Saved to blockchain.json");
 
     // === Load and verify ===
     println!("\n📂 Loading blockchain from disk...");
-    let loaded = Store::load_blockchain("blockchain.json")
-        .expect("Failed to load");
+    let loaded = Store::load_blockchain("blockchain.json").expect("Failed to load");
     println!("✓ Loaded {} blocks from disk", loaded.chain.len());
 }
