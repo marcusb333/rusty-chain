@@ -1,65 +1,103 @@
-# Rust PoW Blockchain
+# rusty-chain
 
-A clean, modular Proof-of-Work blockchain implementation in Rust for learning and experimentation.
+A modular Proof-of-Work blockchain in Rust with secp256k1 wallets and a CLI.
 
 ## Architecture
 
 ```
-blockchain/
-├── src/
-│   ├── main.rs          # Demo application
-│   ├── crypto.rs        # SHA256 hashing & PoW validation
-│   ├── transaction.rs   # Transaction & TransactionPool
-│   ├── block.rs         # Block structure & mining
-│   ├── blockchain.rs    # Main chain logic & validation
-│   └── persistence.rs   # Save/load blockchain to disk
-└── Cargo.toml           # Dependencies
+src/
+├── main.rs          # CLI entry point (clap)
+├── lib.rs           # Public module exports
+├── crypto.rs        # SHA256 hashing & PoW validation
+├── wallet.rs        # secp256k1 key pairs, signing, address derivation
+├── transaction.rs   # Transaction + TransactionPool
+├── block.rs         # Block structure & PoW mining
+├── blockchain.rs    # Chain logic & validation
+└── persistence.rs   # JSON save/load
+```
+
+### Data Flow
+
+```
+CLI (main.rs)
+ ├── wallet create/list/info  ──►  WalletStore (wallet.rs)
+ │                                   └── ~/.rusty-chain/wallets.json
+ │
+ ├── send --from --to --amount
+ │    ├── load Wallet (wallet.rs)
+ │    ├── sign Transaction (transaction.rs)
+ │    └── add to Blockchain pool (blockchain.rs)
+ │
+ ├── mine --miner
+ │    ├── take pending txs from TransactionPool
+ │    ├── prepend coinbase Transaction
+ │    ├── mine Block (block.rs) — increment nonce until PoW met
+ │    └── append to chain, save (persistence.rs)
+ │
+ └── status  ──►  Blockchain.get_stats()
 ```
 
 ### Module Breakdown
 
 **`crypto`**
-- `hash_sha256()` - Raw SHA256 hashing
-- `hash_object()` - Serialize struct and hash it
-- `check_pow()` - Validate PoW (leading zeros)
+- `hash_sha256(data)` — raw SHA256 → 64-char hex string
+- `hash_object(obj)` — serialize + hash any `Serialize` value
+- `check_pow(hash, difficulty)` — true if hash has N leading zeros
+
+**`wallet`**
+- `Wallet` — secp256k1 key pair; derives a 40-char hex address from the public key
+- `Wallet::sign(message)` — ECDSA signature (hex-encoded)
+- `verify_signature(pk_hex, message, sig_hex)` — verify without a `Wallet` instance
+- `address_from_public_key_hex(pk_hex)` — derive address from raw public key
+- `WalletStore` — persist/load wallets as JSON in `~/.rusty-chain/wallets.json`
 
 **`transaction`**
-- `Transaction` - From, to, amount, timestamp, ID
-- `TransactionPool` - Queue of pending transactions
-- Validation (checks amount > 0, non-empty addresses)
+- `Transaction` — `from`, `to`, `amount`, `timestamp`, `id` (SHA256), `signature`, `public_key`
+- `Transaction::sign(wallet)` — attach ECDSA signature
+- `Transaction::is_valid()` — validates amount > 0, non-empty addresses, and signature (skipped for `from = "system"` coinbase)
+- `TransactionPool` — pending queue; rejects invalid transactions on insert
 
 **`block`**
-- `BlockHeader` - Index, timestamp, prev_hash, merkle_root, nonce, difficulty
-- `Block` - Header + transactions + computed hash
-- `mine()` - Increment nonce until PoW satisfied
-- `verify_pow()` - Check block meets difficulty target
-- `compute_merkle_root()` - Hash of all transaction IDs
+- `BlockHeader` — `index`, `timestamp`, `previous_hash`, `merkle_root`, `nonce`, `difficulty`
+- `Block::mine()` — increments nonce until `check_pow` passes; returns winning nonce
+- `Block::verify_pow()` — checks stored hash meets difficulty target
+- `Block::compute_merkle_root()` — SHA256 of all transaction IDs concatenated
 
 **`blockchain`**
-- `Blockchain` - Chain vector + difficulty + transaction pool
-- `mine_block()` - Create block from pending txs + coinbase
-- `is_valid()` - Verify PoW + chain linkage for all blocks
-- `get_stats()` - Chain statistics
-- Genesis block created automatically
+- `Blockchain` — `Vec<Block>` + `difficulty` + `TransactionPool`
+- `Blockchain::new()` — creates genesis block (auto-mined at difficulty 2)
+- `mine_block(miner_addr)` — drains up to 10 pending txs, prepends coinbase (50 coins), mines and appends
+- `is_valid()` — verifies PoW, chain linkage (`previous_hash`), and index sequence for every block
+- `get_stats()` — totals: blocks, transactions, pending, difficulty, latest hash
 
 **`persistence`**
-- `Store::save_blockchain()` - Write chain to JSON
-- `Store::load_blockchain()` - Load chain from JSON
-- `Store::print_blockchain()` - Pretty-print chain details
+- `Store::save_blockchain(blockchain, path)` — serialize chain + pending pool to JSON
+- `Store::load_blockchain(path)` — deserialize and restore
+- `Store::print_blockchain(blockchain)` — summary to stdout
 
-## Running the Demo
+## CLI Usage
 
 ```bash
-cd blockchain
-cargo run
-```
+cargo build --release
 
-Output:
-- ✓ Genesis block mined
-- ✓ Two rounds of transactions mined
-- ✓ Chain validation
-- ✓ Blockchain saved to `blockchain.json`
-- ✓ Blockchain reloaded from disk
+# Wallet management
+./target/release/rusty-chain wallet create alice
+./target/release/rusty-chain wallet create bob
+./target/release/rusty-chain wallet list
+./target/release/rusty-chain wallet info alice
+
+# Send coins (adds signed transaction to pending pool)
+./target/release/rusty-chain send --from alice --to bob --amount 10.5
+
+# Mine pending transactions (earns 50-coin coinbase reward)
+./target/release/rusty-chain mine --miner alice
+
+# Show chain status
+./target/release/rusty-chain status
+
+# Run the built-in demo
+./target/release/rusty-chain demo
+```
 
 ## Running Tests
 
@@ -67,119 +105,48 @@ Output:
 cargo test
 ```
 
-All 12 unit tests pass:
-- Crypto hashing & PoW validation
-- Transaction creation & pool management
-- Block mining & validation
-- Blockchain operations
-- Persistence (save/load)
+55 unit tests across all modules:
+
+| Module | Tests |
+|--------|-------|
+| `crypto` | hashing correctness, PoW boundary cases, `hash_object` |
+| `wallet` | key generation, sign/verify, address derivation, error handling |
+| `transaction` | validation rules, signature tampering, pool operations |
+| `block` | mining, PoW verification, hash determinism, merkle root |
+| `blockchain` | chain creation, validation, tamper detection, stats |
+| `persistence` | save/load round-trip with pending transactions |
 
 ## Current Features
 
-✓ SHA256 hashing
-✓ Proof-of-Work mining (adjustable difficulty)
-✓ Block structure with merkle roots
-✓ Transaction pool management
-✓ Coinbase rewards for mining
-✓ Full chain validation
-✓ Persistence to JSON
-✓ Comprehensive test coverage
-
-## Next Steps (Easy → Hard)
-
-### 1. Difficulty Adjustment
-Implement dynamic difficulty based on block time:
-```rust
-// In blockchain.rs
-pub fn adjust_difficulty(&mut self) {
-    let recent_blocks = &self.chain[self.chain.len() - 10..];
-    let avg_time = /* compute average block time */;
-    if avg_time > TARGET_BLOCK_TIME {
-        self.difficulty -= 1;
-    } else if avg_time < TARGET_BLOCK_TIME {
-        self.difficulty += 1;
-    }
-}
-```
-
-### 2. Digital Signatures
-Add transaction signing with `secp256k1`:
-```toml
-# In Cargo.toml
-secp256k1 = "0.27"
-```
-
-Then modify `Transaction` to include signature field and verify before adding to pool.
-
-### 3. State Machine
-Track account balances:
-```rust
-// In blockchain.rs
-pub balance_map: HashMap<String, f64>
-```
-
-Validate transaction outputs before mining.
-
-### 4. Persistence Upgrade
-Replace JSON with `rocksdb`:
-```toml
-rocksdb = "0.19"
-```
-
-Much faster for large chains.
-
-### 5. P2P Networking
-Add `tokio` + `libp2p` for multi-node sync:
-```toml
-tokio = { version = "1", features = ["full"] }
-libp2p = "0.51"
-```
-
-Enable nodes to broadcast blocks and sync.
-
-### 6. Fork Resolution
-Implement longest-chain rule:
-```rust
-pub fn resolve_fork(&mut self, competing_chain: Vec<Block>) {
-    if competing_chain.len() > self.chain.len() {
-        self.chain = competing_chain;
-    }
-}
-```
-
-### 7. Smart Contracts
-Simple VM for executing contract code on transactions.
-
-### 8. Merkle Proof / SPV
-Implement merkle tree proof for light clients.
-
-## Performance
-
-- **Mining time** (difficulty 2): ~300-400 hash iterations
-- **Chain validation**: O(n) linear scan
-- **Block serialization**: JSON (can upgrade to bincode for speed)
+- SHA256 hashing with `sha2`
+- Proof-of-Work mining (adjustable difficulty, leading-zero target)
+- secp256k1 ECDSA wallet key pairs and transaction signing
+- Block structure with simplified Merkle root
+- Transaction pool with signature validation
+- Coinbase rewards (50 coins per mined block)
+- Full chain validation (PoW + linkage + index)
+- JSON persistence to `~/.rusty-chain/`
+- CLI with wallet management, send, mine, and status commands
 
 ## Design Notes
 
-- **Simplified merkle tree**: Concatenates all tx IDs and hashes once (real chains use binary tree)
-- **No UTXO model**: Uses simple from/to/amount (real chains use UTXOs)
-- **In-memory pool**: Transactions lost on restart (real chains persist)
-- **Single difficulty**: Not adjusted dynamically (step 1 in next steps)
-- **No consensus rules**: Accepts any block with valid PoW (need tx validation, balance checks)
+- **Simplified Merkle tree** — concatenates all tx IDs and hashes once; real chains use a binary tree
+- **No UTXO model** — simple from/to/amount; no balance tracking or double-spend prevention
+- **In-memory pool** — persisted to JSON on every write, loaded on startup
+- **Fixed difficulty** — not adjusted dynamically
+- **No p2p** — single-node only
 
-## Educational Value
+## Potential Next Steps
 
-This codebase is great for learning:
-- How blockchain immutability works (hash chain)
-- Why PoW creates security (computational cost)
-- Block structure & merkle trees
-- Mining & nonce increment loops
-- Chain validation & state consistency
-- Modularity in Rust (separation of concerns)
-- Unit testing in Rust
-- Serialization with serde
-- Ownership & lifetimes (minimal in this design, but present)
+1. **Dynamic difficulty** — adjust based on average block time over last N blocks
+2. **Balance tracking** — maintain a `HashMap<address, f64>` and reject overspend
+3. **UTXO model** — replace balances with unspent transaction outputs
+4. **RocksDB persistence** — replace JSON for performance at scale
+5. **P2P networking** — `tokio` + `libp2p` for multi-node sync and block broadcast
+6. **Fork resolution** — longest-chain rule when competing chains are received
+7. **Merkle proofs** — proper binary Merkle tree for SPV light clients
+8. **Simple VM** — scripting layer for basic smart contracts
 
 ## License
 
-MIT (do what you want)
+MIT
