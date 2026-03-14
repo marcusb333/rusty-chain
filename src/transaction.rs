@@ -283,13 +283,22 @@ mod tests {
     #[test]
     fn test_pool_pending_transactions_slice() {
         let mut pool = TransactionPool::new();
-        pool.add_transaction(Transaction::new("system".to_string(), "bob".to_string(), 1.0)).unwrap();
+        pool.add_transaction(Transaction::new(
+            "system".to_string(),
+            "bob".to_string(),
+            1.0,
+        ))
+        .unwrap();
         assert_eq!(pool.pending_transactions().len(), 1);
     }
 
     #[test]
     fn test_pool_from_transactions() {
-        let txs = vec![Transaction::new("system".to_string(), "bob".to_string(), 1.0)];
+        let txs = vec![Transaction::new(
+            "system".to_string(),
+            "bob".to_string(),
+            1.0,
+        )];
         let pool = TransactionPool::from_transactions(txs);
         assert_eq!(pool.pending_count(), 1);
     }
@@ -297,7 +306,12 @@ mod tests {
     #[test]
     fn test_pool_take_zero() {
         let mut pool = TransactionPool::new();
-        pool.add_transaction(Transaction::new("system".to_string(), "bob".to_string(), 1.0)).unwrap();
+        pool.add_transaction(Transaction::new(
+            "system".to_string(),
+            "bob".to_string(),
+            1.0,
+        ))
+        .unwrap();
         let taken = pool.take_transactions(0);
         assert!(taken.is_empty());
         assert_eq!(pool.pending_count(), 1);
