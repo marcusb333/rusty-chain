@@ -128,6 +128,17 @@ impl Default for Blockchain {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::wallet::Wallet;
+
+    fn signed_tx(from_wallet: &Wallet, to_address: &str, amount: f64) -> Transaction {
+        let mut tx = Transaction::new(
+            from_wallet.address().to_string(),
+            to_address.to_string(),
+            amount,
+        );
+        tx.sign(from_wallet);
+        tx
+    }
 
     #[test]
     fn test_blockchain_creation() {
@@ -139,7 +150,8 @@ mod tests {
     #[test]
     fn test_add_transaction() {
         let mut blockchain = Blockchain::new();
-        let tx = Transaction::new("alice".to_string(), "bob".to_string(), 10.0);
+        let wallet = Wallet::new();
+        let tx = signed_tx(&wallet, "bob", 10.0);
         blockchain.add_transaction(tx).unwrap();
         assert_eq!(blockchain.transaction_pool.pending_count(), 1);
     }
@@ -147,12 +159,9 @@ mod tests {
     #[test]
     fn test_mine_block() {
         let mut blockchain = Blockchain::new();
+        let wallet = Wallet::new();
         blockchain
-            .add_transaction(Transaction::new(
-                "alice".to_string(),
-                "bob".to_string(),
-                10.0,
-            ))
+            .add_transaction(signed_tx(&wallet, "bob", 10.0))
             .unwrap();
 
         blockchain.mine_block("miner1").unwrap();
@@ -162,12 +171,9 @@ mod tests {
     #[test]
     fn test_chain_validation() {
         let mut blockchain = Blockchain::new();
+        let wallet = Wallet::new();
         blockchain
-            .add_transaction(Transaction::new(
-                "alice".to_string(),
-                "bob".to_string(),
-                10.0,
-            ))
+            .add_transaction(signed_tx(&wallet, "bob", 10.0))
             .unwrap();
         blockchain.mine_block("miner1").unwrap();
         assert!(blockchain.is_valid());

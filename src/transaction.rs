@@ -1,4 +1,5 @@
 use crate::crypto;
+use crate::wallet::{self, Wallet};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -8,6 +9,10 @@ pub struct Transaction {
     pub amount: f64,
     pub timestamp: u64,
     pub id: String,
+    #[serde(default)]
+    pub signature: Option<String>,
+    #[serde(default)]
+    pub public_key: Option<String>,
 }
 
 impl Transaction {
@@ -23,6 +28,8 @@ impl Transaction {
             amount,
             timestamp,
             id: String::new(),
+            signature: None,
+            public_key: None,
         };
 
         // Hash the transaction data for an ID
@@ -32,9 +39,48 @@ impl Transaction {
         Transaction { id, ..tx }
     }
 
+    pub fn signable_bytes(&self) -> Vec<u8> {
+        let payload = format!("{}{}{}{}", self.from, self.to, self.amount, self.timestamp);
+        payload.into_bytes()
+    }
+
+    pub fn sign(&mut self, wallet: &Wallet) {
+        let bytes = self.signable_bytes();
+        self.signature = Some(wallet.sign(&bytes));
+        self.public_key = Some(wallet.public_key_hex());
+    }
+
     pub fn is_valid(&self) -> bool {
-        // TODO: Verify signature in real implementation
-        self.amount > 0.0 && !self.from.is_empty() && !self.to.is_empty()
+        if self.amount <= 0.0 || self.from.is_empty() || self.to.is_empty() {
+            return false;
+        }
+
+        // Coinbase transactions from "system" don't require signatures
+        if self.from == "system" {
+            return true;
+        }
+
+        // Non-system transactions must be signed
+        let signature = match &self.signature {
+            Some(s) => s,
+            None => return false,
+        };
+        let public_key = match &self.public_key {
+            Some(pk) => pk,
+            None => return false,
+        };
+
+        // Verify the signature
+        let bytes = self.signable_bytes();
+        if !wallet::verify_signature(public_key, &bytes, signature) {
+            return false;
+        }
+
+        // Verify the public key matches the sender address
+        match wallet::address_from_public_key_hex(public_key) {
+            Ok(addr) => addr == self.from,
+            Err(_) => false,
+        }
     }
 }
 
@@ -88,19 +134,36 @@ mod tests {
     }
 
     #[test]
-    fn test_transaction_validity() {
-        let valid_tx = Transaction::new("alice".to_string(), "bob".to_string(), 10.0);
-        assert!(valid_tx.is_valid());
+    fn test_coinbase_transaction_valid() {
+        let tx = Transaction::new("system".to_string(), "miner".to_string(), 50.0);
+        assert!(tx.is_valid());
+    }
 
-        let mut invalid_tx = Transaction::new("alice".to_string(), "bob".to_string(), 10.0);
-        invalid_tx.amount = -5.0;
-        assert!(!invalid_tx.is_valid());
+    #[test]
+    fn test_unsigned_transaction_invalid() {
+        let tx = Transaction::new("alice".to_string(), "bob".to_string(), 10.0);
+        assert!(!tx.is_valid());
+    }
+
+    #[test]
+    fn test_signed_transaction_valid() {
+        let wallet = Wallet::new();
+        let mut tx = Transaction::new(wallet.address().to_string(), "bob".to_string(), 10.0);
+        tx.sign(&wallet);
+        assert!(tx.is_valid());
+    }
+
+    #[test]
+    fn test_invalid_amount() {
+        let mut tx = Transaction::new("system".to_string(), "bob".to_string(), 10.0);
+        tx.amount = -5.0;
+        assert!(!tx.is_valid());
     }
 
     #[test]
     fn test_transaction_pool() {
         let mut pool = TransactionPool::new();
-        let tx = Transaction::new("alice".to_string(), "bob".to_string(), 10.0);
+        let tx = Transaction::new("system".to_string(), "bob".to_string(), 10.0);
 
         pool.add_transaction(tx).unwrap();
         assert_eq!(pool.pending_count(), 1);
