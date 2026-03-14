@@ -1,5 +1,5 @@
 use rand::rngs::OsRng;
-use secp256k1::{Secp256k1, SecretKey, PublicKey, Message};
+use secp256k1::{Message, PublicKey, Secp256k1, SecretKey};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -203,10 +203,18 @@ mod tests {
         let message = b"hello blockchain";
 
         let signature = wallet.sign(message);
-        assert!(verify_signature(&wallet.public_key_hex(), message, &signature));
+        assert!(verify_signature(
+            &wallet.public_key_hex(),
+            message,
+            &signature
+        ));
 
         // Wrong message should fail
-        assert!(!verify_signature(&wallet.public_key_hex(), b"wrong message", &signature));
+        assert!(!verify_signature(
+            &wallet.public_key_hex(),
+            b"wrong message",
+            &signature
+        ));
     }
 
     #[test]
@@ -251,7 +259,11 @@ mod tests {
 
         let signature = wallet1.sign(message);
         // wallet2's public key should not verify wallet1's signature
-        assert!(!verify_signature(&wallet2.public_key_hex(), message, &signature));
+        assert!(!verify_signature(
+            &wallet2.public_key_hex(),
+            message,
+            &signature
+        ));
     }
 
     #[test]
@@ -272,7 +284,11 @@ mod tests {
     #[test]
     fn test_verify_signature_invalid_hex_returns_false() {
         let message = b"hello";
-        assert!(!verify_signature("invalid-pk-hex", message, "invalid-sig-hex"));
+        assert!(!verify_signature(
+            "invalid-pk-hex",
+            message,
+            "invalid-sig-hex"
+        ));
     }
 
     #[test]
