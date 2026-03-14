@@ -178,4 +178,76 @@ mod tests {
         blockchain.mine_block("miner1").unwrap();
         assert!(blockchain.is_valid());
     }
+
+    #[test]
+    fn test_genesis_block_has_valid_pow() {
+        let blockchain = Blockchain::new();
+        assert!(blockchain.chain[0].verify_pow());
+    }
+
+    #[test]
+    fn test_get_latest_block_is_genesis_initially() {
+        let blockchain = Blockchain::new();
+        assert_eq!(blockchain.get_latest_block().header.index, 0);
+    }
+
+    #[test]
+    fn test_get_latest_block_updates_after_mining() {
+        let mut blockchain = Blockchain::new();
+        blockchain.mine_block("miner1").unwrap();
+        assert_eq!(blockchain.get_latest_block().header.index, 1);
+    }
+
+    #[test]
+    fn test_unsigned_transaction_rejected() {
+        let mut blockchain = Blockchain::new();
+        let tx = crate::transaction::Transaction::new("alice".to_string(), "bob".to_string(), 5.0);
+        assert!(blockchain.add_transaction(tx).is_err());
+    }
+
+    #[test]
+    fn test_transaction_pool_cleared_after_mining() {
+        let mut blockchain = Blockchain::new();
+        let wallet = Wallet::new();
+        blockchain
+            .add_transaction(signed_tx(&wallet, "bob", 10.0))
+            .unwrap();
+        assert_eq!(blockchain.transaction_pool.pending_count(), 1);
+
+        blockchain.mine_block("miner1").unwrap();
+        assert_eq!(blockchain.transaction_pool.pending_count(), 0);
+    }
+
+    #[test]
+    fn test_tampered_chain_is_invalid() {
+        let mut blockchain = Blockchain::new();
+        blockchain.mine_block("miner1").unwrap();
+
+        // Tamper with the genesis block hash to break chain linkage
+        blockchain.chain[0].hash = "tampered_hash".to_string();
+        assert!(!blockchain.is_valid());
+    }
+
+    #[test]
+    fn test_get_stats_after_mining() {
+        let mut blockchain = Blockchain::new();
+        blockchain.mine_block("miner1").unwrap();
+
+        let stats = blockchain.get_stats();
+        assert_eq!(stats.total_blocks, 2);
+        assert!(stats.total_transactions >= 1); // at least the coinbase
+        assert_eq!(stats.pending_transactions, 0);
+        assert_eq!(stats.difficulty, 2);
+    }
+
+    #[test]
+    fn test_blocks_are_sequentially_indexed() {
+        let mut blockchain = Blockchain::new();
+        blockchain.mine_block("miner1").unwrap();
+        blockchain.mine_block("miner1").unwrap();
+
+        for (i, block) in blockchain.chain.iter().enumerate() {
+            assert_eq!(block.header.index, i as u64);
+        }
+    }
 }

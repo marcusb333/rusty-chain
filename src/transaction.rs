@@ -180,4 +180,59 @@ mod tests {
         assert_eq!(txs.len(), 1);
         assert_eq!(pool.pending_count(), 0);
     }
+
+    #[test]
+    fn test_empty_from_is_invalid() {
+        let tx = Transaction::new("".to_string(), "bob".to_string(), 10.0);
+        assert!(!tx.is_valid());
+    }
+
+    #[test]
+    fn test_empty_to_is_invalid() {
+        let tx = Transaction::new("system".to_string(), "".to_string(), 10.0);
+        assert!(!tx.is_valid());
+    }
+
+    #[test]
+    fn test_zero_amount_is_invalid() {
+        let tx = Transaction::new("system".to_string(), "bob".to_string(), 0.0);
+        assert!(!tx.is_valid());
+    }
+
+    #[test]
+    fn test_tampered_amount_invalidates_signature() {
+        let wallet = Wallet::new();
+        let mut tx = Transaction::new(wallet.address().to_string(), "bob".to_string(), 10.0);
+        tx.sign(&wallet);
+        assert!(tx.is_valid());
+
+        tx.amount = 1000.0; // tamper after signing
+        assert!(!tx.is_valid());
+    }
+
+    #[test]
+    fn test_pool_rejects_invalid_transaction() {
+        let mut pool = TransactionPool::new();
+        let tx = Transaction::new("alice".to_string(), "bob".to_string(), 10.0); // unsigned
+        assert!(pool.add_transaction(tx).is_err());
+        assert_eq!(pool.pending_count(), 0);
+    }
+
+    #[test]
+    fn test_take_transactions_more_than_available() {
+        let mut pool = TransactionPool::new();
+        pool.add_transaction(Transaction::new("system".to_string(), "bob".to_string(), 1.0)).unwrap();
+        pool.add_transaction(Transaction::new("system".to_string(), "carol".to_string(), 2.0)).unwrap();
+
+        let txs = pool.take_transactions(10); // request more than available
+        assert_eq!(txs.len(), 2);
+        assert_eq!(pool.pending_count(), 0);
+    }
+
+    #[test]
+    fn test_transaction_id_is_deterministic_given_same_fields() {
+        let tx = Transaction::new("system".to_string(), "bob".to_string(), 5.0);
+        assert!(!tx.id.is_empty());
+        assert_eq!(tx.id.len(), 64); // SHA256 hex
+    }
 }

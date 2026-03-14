@@ -22,3 +22,5 @@ target
 .claude/
 /.run/
 blockchain.json
+.DS_Store
+*/DS_Store

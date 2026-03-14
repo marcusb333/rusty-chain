@@ -110,4 +110,36 @@ mod tests {
         assert!(block.verify_pow());
         assert_eq!(block.header.nonce, nonce);
     }
+
+    #[test]
+    fn test_unmined_block_fails_pow() {
+        let block = Block::new(0, "genesis".to_string(), vec![], 2);
+        // hash is empty before mining
+        assert!(!block.verify_pow());
+    }
+
+    #[test]
+    fn test_compute_hash_is_deterministic() {
+        let block = Block::new(0, "genesis".to_string(), vec![], 1);
+        let h1 = block.compute_hash();
+        let h2 = block.compute_hash();
+        assert_eq!(h1, h2);
+        assert_eq!(h1.len(), 64);
+    }
+
+    #[test]
+    fn test_different_previous_hashes_produce_different_hashes() {
+        let b1 = Block::new(0, "hash_a".to_string(), vec![], 1);
+        let b2 = Block::new(0, "hash_b".to_string(), vec![], 1);
+        assert_ne!(b1.compute_hash(), b2.compute_hash());
+    }
+
+    #[test]
+    fn test_merkle_root_empty_transactions() {
+        let block = Block::new(0, "genesis".to_string(), vec![], 1);
+        // Merkle root should be deterministic for empty tx list
+        let block2 = Block::new(0, "genesis".to_string(), vec![], 1);
+        assert_eq!(block.header.merkle_root, block2.header.merkle_root);
+        assert!(!block.header.merkle_root.is_empty());
+    }
 }
