@@ -1,5 +1,6 @@
 use rand::rngs::OsRng;
 use secp256k1::{Secp256k1, SecretKey, PublicKey, Message};
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use crate::crypto;
@@ -8,6 +9,15 @@ pub struct Wallet {
     pub secret_key: SecretKey,
     pub public_key: PublicKey,
     pub address: String,
+}
+
+/// Serializable wallet data for persistence.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WalletData {
+    pub name: String,
+    pub address: String,
+    pub public_key: String,
+    pub secret_key: String,
 }
 
 impl Wallet {
@@ -23,12 +33,40 @@ impl Wallet {
         }
     }
 
+    pub fn from_secret_key_hex(sk_hex: &str) -> Result<Self, String> {
+        let bytes = hex::decode(sk_hex).map_err(|e| format!("Invalid hex: {}", e))?;
+        let secret_key =
+            SecretKey::from_slice(&bytes).map_err(|e| format!("Invalid secret key: {}", e))?;
+        let secp = Secp256k1::new();
+        let public_key = PublicKey::from_secret_key(&secp, &secret_key);
+        let address = derive_address(&public_key);
+
+        Ok(Wallet {
+            secret_key,
+            public_key,
+            address,
+        })
+    }
+
     pub fn address(&self) -> &str {
         &self.address
     }
 
     pub fn public_key_hex(&self) -> String {
         hex::encode(self.public_key.serialize())
+    }
+
+    pub fn secret_key_hex(&self) -> String {
+        hex::encode(self.secret_key.secret_bytes())
+    }
+
+    pub fn to_data(&self, name: &str) -> WalletData {
+        WalletData {
+            name: name.to_string(),
+            address: self.address.clone(),
+            public_key: self.public_key_hex(),
+            secret_key: self.secret_key_hex(),
+        }
     }
 
     pub fn sign(&self, message: &[u8]) -> String {
@@ -93,6 +131,61 @@ pub fn verify_signature(public_key_hex: &str, message: &[u8], signature_hex: &st
     secp.verify_ecdsa(&msg, &signature, &public_key).is_ok()
 }
 
+/// Manages wallet persistence to a JSON file.
+pub struct WalletStore;
+
+impl WalletStore {
+    pub fn data_dir() -> std::path::PathBuf {
+        dirs::home_dir()
+            .unwrap_or_else(|| std::path::PathBuf::from("."))
+            .join(".rusty-chain")
+    }
+
+    pub fn wallets_path() -> std::path::PathBuf {
+        Self::data_dir().join("wallets.json")
+    }
+
+    pub fn blockchain_path() -> std::path::PathBuf {
+        Self::data_dir().join("blockchain.json")
+    }
+
+    pub fn load_wallets() -> Vec<WalletData> {
+        let path = Self::wallets_path();
+        if !path.exists() {
+            return Vec::new();
+        }
+        let data = std::fs::read_to_string(&path).unwrap_or_default();
+        serde_json::from_str(&data).unwrap_or_default()
+    }
+
+    pub fn save_wallets(wallets: &[WalletData]) -> Result<(), String> {
+        let dir = Self::data_dir();
+        std::fs::create_dir_all(&dir).map_err(|e| format!("Failed to create data dir: {}", e))?;
+        let json = serde_json::to_string_pretty(wallets)
+            .map_err(|e| format!("Failed to serialize: {}", e))?;
+        std::fs::write(Self::wallets_path(), json)
+            .map_err(|e| format!("Failed to write: {}", e))?;
+        Ok(())
+    }
+
+    pub fn find_wallet(name: &str) -> Option<Wallet> {
+        let wallets = Self::load_wallets();
+        wallets
+            .iter()
+            .find(|w| w.name == name)
+            .and_then(|w| Wallet::from_secret_key_hex(&w.secret_key).ok())
+    }
+
+    pub fn find_wallet_by_address(address: &str) -> Option<(String, Wallet)> {
+        let wallets = Self::load_wallets();
+        wallets.iter().find(|w| w.address == address).and_then(|w| {
+            Wallet::from_secret_key_hex(&w.secret_key)
+                .ok()
+                .map(|wallet| (w.name.clone(), wallet))
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -128,5 +221,25 @@ mod tests {
         let wallet = Wallet::new();
         let addr = address_from_public_key_hex(&wallet.public_key_hex()).unwrap();
         assert_eq!(addr, wallet.address());
+    }
+
+    #[test]
+    fn test_from_secret_key_hex() {
+        let wallet = Wallet::new();
+        let sk_hex = wallet.secret_key_hex();
+        let restored = Wallet::from_secret_key_hex(&sk_hex).unwrap();
+        assert_eq!(restored.address(), wallet.address());
+        assert_eq!(restored.public_key_hex(), wallet.public_key_hex());
+    }
+
+    #[test]
+    fn test_wallet_data_roundtrip() {
+        let wallet = Wallet::new();
+        let data = wallet.to_data("test");
+        assert_eq!(data.name, "test");
+        assert_eq!(data.address, wallet.address());
+
+        let restored = Wallet::from_secret_key_hex(&data.secret_key).unwrap();
+        assert_eq!(restored.address(), wallet.address());
     }
 }

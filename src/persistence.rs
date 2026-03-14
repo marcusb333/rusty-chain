@@ -1,12 +1,29 @@
+use crate::block::Block;
 use crate::blockchain::Blockchain;
+use crate::transaction::{Transaction, TransactionPool};
+use serde::{Deserialize, Serialize};
 use std::fs;
 
 pub struct Store;
 
+#[derive(Serialize, Deserialize)]
+struct BlockchainFile {
+    chain: Vec<Block>,
+    #[serde(default)]
+    pending_transactions: Vec<Transaction>,
+}
+
 impl Store {
     /// Save blockchain to disk (JSON format)
     pub fn save_blockchain(blockchain: &Blockchain, path: &str) -> Result<(), String> {
-        let json = serde_json::to_string_pretty(&blockchain.chain)
+        let file = BlockchainFile {
+            chain: blockchain.chain.clone(),
+            pending_transactions: blockchain
+                .transaction_pool
+                .pending_transactions()
+                .to_vec(),
+        };
+        let json = serde_json::to_string_pretty(&file)
             .map_err(|e| format!("Serialization error: {}", e))?;
 
         fs::write(path, json).map_err(|e| format!("Failed to write file: {}", e))?;
@@ -18,13 +35,13 @@ impl Store {
     pub fn load_blockchain(path: &str) -> Result<Blockchain, String> {
         let json = fs::read_to_string(path).map_err(|e| format!("Failed to read file: {}", e))?;
 
-        let chain =
+        let file: BlockchainFile =
             serde_json::from_str(&json).map_err(|e| format!("Deserialization error: {}", e))?;
 
         Ok(Blockchain {
-            chain,
+            chain: file.chain,
             difficulty: 2,
-            transaction_pool: Default::default(),
+            transaction_pool: TransactionPool::from_transactions(file.pending_transactions),
         })
     }
 
@@ -62,6 +79,25 @@ mod tests {
         assert_eq!(loaded.chain.len(), blockchain.chain.len());
 
         // Cleanup
+        fs::remove_file(test_path).ok();
+    }
+
+    #[test]
+    fn test_save_load_with_pending_transactions() {
+        use crate::wallet::Wallet;
+
+        let mut blockchain = Blockchain::new();
+        let wallet = Wallet::new();
+        let mut tx = Transaction::new(wallet.address().to_string(), "bob".to_string(), 5.0);
+        tx.sign(&wallet);
+        blockchain.add_transaction(tx).unwrap();
+
+        let test_path = "/tmp/test_blockchain_pending.json";
+        Store::save_blockchain(&blockchain, test_path).unwrap();
+
+        let loaded = Store::load_blockchain(test_path).unwrap();
+        assert_eq!(loaded.transaction_pool.pending_count(), 1);
+
         fs::remove_file(test_path).ok();
     }
 }
