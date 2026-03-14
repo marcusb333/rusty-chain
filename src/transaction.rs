@@ -112,6 +112,14 @@ impl TransactionPool {
     pub fn pending_count(&self) -> usize {
         self.pending.len()
     }
+
+    pub fn pending_transactions(&self) -> &[Transaction] {
+        &self.pending
+    }
+
+    pub fn from_transactions(txs: Vec<Transaction>) -> Self {
+        TransactionPool { pending: txs }
+    }
 }
 
 impl Default for TransactionPool {
