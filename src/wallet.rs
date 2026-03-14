@@ -242,4 +242,49 @@ mod tests {
         let restored = Wallet::from_secret_key_hex(&data.secret_key).unwrap();
         assert_eq!(restored.address(), wallet.address());
     }
+
+    #[test]
+    fn test_verify_signature_wrong_public_key() {
+        let wallet1 = Wallet::new();
+        let wallet2 = Wallet::new();
+        let message = b"hello";
+
+        let signature = wallet1.sign(message);
+        // wallet2's public key should not verify wallet1's signature
+        assert!(!verify_signature(&wallet2.public_key_hex(), message, &signature));
+    }
+
+    #[test]
+    fn test_from_secret_key_hex_invalid_hex() {
+        assert!(Wallet::from_secret_key_hex("not-valid-hex").is_err());
+    }
+
+    #[test]
+    fn test_from_secret_key_hex_wrong_length() {
+        assert!(Wallet::from_secret_key_hex("deadbeef").is_err());
+    }
+
+    #[test]
+    fn test_address_from_public_key_hex_invalid() {
+        assert!(address_from_public_key_hex("not-valid-hex").is_err());
+    }
+
+    #[test]
+    fn test_verify_signature_invalid_hex_returns_false() {
+        let message = b"hello";
+        assert!(!verify_signature("invalid-pk-hex", message, "invalid-sig-hex"));
+    }
+
+    #[test]
+    fn test_public_key_hex_is_66_bytes_compressed() {
+        let wallet = Wallet::new();
+        // Compressed secp256k1 public key is 33 bytes = 66 hex chars
+        assert_eq!(wallet.public_key_hex().len(), 66);
+    }
+
+    #[test]
+    fn test_secret_key_hex_is_64_chars() {
+        let wallet = Wallet::new();
+        assert_eq!(wallet.secret_key_hex().len(), 64);
+    }
 }
